@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.env
+*.db
+node_modules/
+dist/
+.vite/
+.DS_Store
+saved_attachments/
+backend/saved_attachments/
+backend/.env
+backend/test_sync.py
+backend/debug_gmail.py
+.claude/
