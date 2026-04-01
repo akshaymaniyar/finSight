@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getTransactions, updateTransaction } from '../api/transactions';
+import CategorySelect from '../components/CategorySelect';
 import type { TransactionFilters } from '../api/transactions';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -244,29 +245,31 @@ export default function TransactionsPage() {
                           {formatCurrency(Number(txn.amount))}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 relative">
                         {editingId === txn.id ? (
-                          <select
-                            defaultValue={txn.category}
-                            onChange={(e) =>
-                              updateMutation.mutate({ id: txn.id, category: e.target.value })
-                            }
-                            onBlur={() => setEditingId(null)}
-                            autoFocus
-                            className="px-2 py-1 border border-indigo-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          >
-                            {CATEGORIES.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <CategoryBadge
-                            category={txn.category}
-                            clickable
-                            onClick={() => setEditingId(txn.id)}
+                          <CategorySelect
+                            value={txn.category}
+                            subValue={txn.sub_category}
+                            compact
+                            onChange={(cat, sub) => {
+                              updateMutation.mutate({ id: txn.id, category: cat, sub_category: sub || undefined });
+                              setEditingId(null);
+                            }}
+                            onClose={() => setEditingId(null)}
                           />
+                        ) : (
+                          <div
+                            className="cursor-pointer"
+                            onClick={() => setEditingId(txn.id)}
+                          >
+                            <CategoryBadge
+                              category={txn.category}
+                              clickable
+                            />
+                            {txn.sub_category && txn.sub_category !== txn.category && (
+                              <span className="text-[10px] text-gray-400 block mt-0.5">{txn.sub_category}</span>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="px-3 py-3 text-xs text-gray-500 hidden md:table-cell">

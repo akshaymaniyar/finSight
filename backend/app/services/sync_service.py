@@ -26,6 +26,7 @@ from app.models.statement import Statement
 from app.models.sync_history import SyncHistory
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.models.category import Category
 from app.models.category_rule import CategoryRule
 from app.parsers.registry import find_parser, find_parser_by_bank_name
 from app.services.auth_service import get_valid_access_token
@@ -139,6 +140,7 @@ def _process_parsed_transactions(
     parser,
     month_date: date,
     user_rules: Optional[list] = None,
+    db_categories: Optional[list] = None,
 ) -> int:
     """Insert parsed transactions into DB. Returns count of transactions created."""
     account_type_map = {
@@ -167,6 +169,7 @@ def _process_parsed_transactions(
             card_type=parsed_txn.card_type,
             transaction_type=parsed_txn.transaction_type,
             user_rules=user_rules,
+            db_categories=db_categories,
         )
 
         txn_date = parsed_txn.transaction_date or month_date
@@ -263,8 +266,9 @@ async def sync_month(
         access_token = await get_valid_access_token(user, db)
         logger.info("Token refresh status: access token obtained for user_id=%s", user_id)
 
-        # Load user's category rules for auto-categorization
+        # Load user's category rules and DB categories for auto-categorization
         user_rules = db.query(CategoryRule).filter(CategoryRule.user_id == user_id).all()
+        db_categories = db.query(Category).filter(Category.user_id == user_id).all()
 
         # If force resync, delete existing statements for this month
         # CASCADE will delete associated transactions
@@ -373,7 +377,7 @@ async def sync_month(
                 txn_count = 0
                 if parsed_transactions:
                     txn_count = _process_parsed_transactions(
-                        db, user_id, statement, parsed_transactions, parser, month_date, user_rules
+                        db, user_id, statement, parsed_transactions, parser, month_date, user_rules, db_categories
                     )
 
                 # ---- PHASE 2: Parse PDF attachments ----

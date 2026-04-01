@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, CreditCard, Building2, ChevronDown, ChevronUp, Eye, X, BarChart3, List, Edit2, Check } from 'lucide-react';
 import { updateTransaction, getMatchingTransactions } from '../api/transactions';
+import CategorySelect from '../components/CategorySelect';
 import { getStatements, getStatement } from '../api/statements';
 import type { Statement } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -427,7 +428,7 @@ function ExpandedTransactions({ transactions }: { transactions: import('../types
   } | null>(null);
 
   const updateMut = useMutation({
-    mutationFn: ({ id, ...payload }: Parameters<typeof updateTransaction>[1] & { id: number }) =>
+    mutationFn: ({ id, ...payload }: { id: number; category?: string; sub_category?: string; apply_to_all?: boolean; save_rule?: boolean }) =>
       updateTransaction(id, payload),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['statement-detail'] });
@@ -435,14 +436,13 @@ function ExpandedTransactions({ transactions }: { transactions: import('../types
 
       // If there are matching transactions, offer to apply to all
       if (data.applied_to_count === 0 && variables.category) {
-        // Check how many matching exist
         getMatchingTransactions(variables.id).then((match) => {
           if (match.count > 1) {
             setShowApplyAll({
               txnId: variables.id,
               merchant: match.merchant,
               category: variables.category!,
-              matchCount: match.count - 1, // exclude current
+              matchCount: match.count - 1,
             });
           }
         });
@@ -495,22 +495,25 @@ function ExpandedTransactions({ transactions }: { transactions: import('../types
                     {formatCurrency(Number(txn.amount))}
                   </span>
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 relative">
                   {editingId === txn.id ? (
-                    <select
-                      defaultValue={txn.category}
-                      onChange={(e) => handleCategoryChange(txn.id, e.target.value)}
-                      onBlur={() => setEditingId(null)}
-                      autoFocus
-                      className="px-2 py-1 border border-indigo-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+                    <CategorySelect
+                      value={txn.category}
+                      subValue={txn.sub_category}
+                      compact
+                      onChange={(cat, sub) => {
+                        updateMut.mutate({ id: txn.id, category: cat, sub_category: sub || undefined });
+                      }}
+                      onClose={() => setEditingId(null)}
+                    />
                   ) : (
                     <div className="flex items-center gap-1.5 group">
-                      <CategoryBadge category={txn.category} />
+                      <div className="flex flex-col">
+                        <CategoryBadge category={txn.category} />
+                        {txn.sub_category && txn.sub_category !== txn.category && (
+                          <span className="text-[10px] text-gray-400 mt-0.5">{txn.sub_category}</span>
+                        )}
+                      </div>
                       <button
                         onClick={() => setEditingId(txn.id)}
                         className="p-0.5 text-gray-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"

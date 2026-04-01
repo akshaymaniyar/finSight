@@ -131,14 +131,23 @@ def categorize_transaction(
     card_type: str = "ACCOUNT",
     transaction_type: str = "DEBIT",
     user_rules: Optional[list] = None,
+    db_categories: Optional[list] = None,
 ) -> dict:
     """Categorize a transaction based on merchant name and raw description.
+
+    Uses DB categories for leaf-level matching when available:
+    1. User-defined rules (highest priority)
+    2. DB subcategory keyword matching (leaf level)
+    3. DB parent category keyword matching (if no subcategory matched)
+    4. Hardcoded CATEGORY_RULES fallback
 
     Args:
         merchant: The merchant/payee name.
         description: The raw transaction description text.
         card_type: ACCOUNT, CREDIT_CARD, or DEBIT_CARD.
         transaction_type: DEBIT or CREDIT.
+        user_rules: User's CategoryRule records.
+        db_categories: All Category records for the user (parents + children).
 
     Returns:
         Dict with keys: category, sub_category, is_investment, is_mutual_fund,
@@ -227,13 +236,61 @@ def categorize_transaction(
     if result["category"] not in ("Uncategorized",):
         return result
 
-    # Match against category rules
+    # --- DB category matching (leaf-level first) ---
+    if db_categories:
+        # Build parent lookup
+        parents = {c.id: c for c in db_categories if c.parent_id is None}
+        children = [c for c in db_categories if c.parent_id is not None]
+
+        # Pass 1: Try subcategory keywords (leaf level — most specific)
+        for child in children:
+            if not child.keywords:
+                continue
+            for kw in child.keywords.split(","):
+                kw = kw.strip().lower()
+                if kw and kw in combined:
+                    parent = parents.get(child.parent_id)
+                    if parent:
+                        result["category"] = parent.name
+                        result["sub_category"] = child.name
+                        return result
+
+        # Pass 2: No subcategory matched — try parent-level (broader)
+        # (parents don't have keywords by default, but just in case)
+        for parent in parents.values():
+            if parent.keywords:
+                for kw in parent.keywords.split(","):
+                    kw = kw.strip().lower()
+                    if kw and kw in combined:
+                        result["category"] = parent.name
+                        return result
+
+    # --- Fallback: hardcoded CATEGORY_RULES ---
     for category, keywords in CATEGORY_RULES.items():
         for kw in keywords:
             if kw in combined:
                 result["category"] = category
-                logger.debug("Categorized: merchant=%s -> category=%s, flags={self_transfer=%s, investment=%s, mutual_fund=%s, zerodha=%s}", merchant, result["category"], result["is_self_transfer"], result["is_investment"], result["is_mutual_fund"], result["is_zerodha"])
+                # Try to find matching subcategory from DB for this parent
+                if db_categories:
+                    parent_match = next(
+                        (c for c in db_categories if c.parent_id is None and c.name == category),
+                        None,
+                    )
+                    if parent_match:
+                        children = [c for c in db_categories if c.parent_id == parent_match.id and c.keywords]
+                        for child in children:
+                            for ckw in child.keywords.split(","):
+                                ckw = ckw.strip().lower()
+                                if ckw and ckw in combined:
+                                    result["sub_category"] = child.name
+                                    return result
+                        # No subcategory matched — use "Other" if it exists
+                        other = next(
+                            (c for c in db_categories if c.parent_id == parent_match.id and c.name == "Other"),
+                            None,
+                        )
+                        if other:
+                            result["sub_category"] = "Other"
                 return result
 
-    logger.debug("Categorized: merchant=%s -> category=%s, flags={self_transfer=%s, investment=%s, mutual_fund=%s, zerodha=%s}", merchant, result["category"], result["is_self_transfer"], result["is_investment"], result["is_mutual_fund"], result["is_zerodha"])
     return result
