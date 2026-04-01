@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey, UniqueConstraint, Numeric
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from app.database import Base
 
@@ -20,6 +20,8 @@ class Statement(Base):
     parse_status = Column(String(20), default="PENDING")  # PENDING, PARSED, FAILED, SKIPPED
     parse_error = Column(Text)
     transaction_count = Column(Integer, default=0)
+    total_amount_due = Column(Numeric(15, 2), nullable=True)
+    minimum_amount_due = Column(Numeric(15, 2), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (

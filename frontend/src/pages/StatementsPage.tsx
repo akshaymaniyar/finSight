@@ -96,8 +96,9 @@ export default function StatementsPage() {
   const monthlyData = months.map((month) => {
     const monthStatements = statements.filter((s) => s.statement_month?.slice(0, 7) === month);
     const totalTxns = monthStatements.reduce((sum, s) => sum + (s.transaction_count || 0), 0);
+    const totalDue = monthStatements.reduce((sum, s) => sum + (s.total_amount_due || 0), 0);
     const bankNames = [...new Set(monthStatements.map((s) => s.bank_name).filter(Boolean))];
-    return { month, statements: monthStatements, totalTxns, bankNames };
+    return { month, statements: monthStatements, totalTxns, totalDue, bankNames };
   });
 
   return (
@@ -188,11 +189,20 @@ export default function StatementsPage() {
           {monthlyData.length === 0 ? (
             <EmptyState icon={FileText} title="No statements found" description="Sync your bank statement emails to see them here." />
           ) : (
-            monthlyData.map(({ month, statements: monthStmts, totalTxns, bankNames }) => (
+            monthlyData.map(({ month, statements: monthStmts, totalTxns, totalDue, bankNames }) => (
               <div key={month} className="bg-white rounded-xl border border-gray-200 p-5">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-1">
                   <h3 className="text-lg font-bold text-gray-900">{formatMonth(month)}</h3>
-                  <span className="text-sm text-gray-500">{totalTxns} transactions</span>
+                  <span className="text-sm text-gray-500">{monthStmts.length} statements</span>
+                </div>
+                {/* Aggregate summary */}
+                <div className="flex flex-wrap gap-4 mb-4 text-sm">
+                  <span className="text-gray-500">{totalTxns} transactions</span>
+                  {totalDue > 0 && (
+                    <span className="font-semibold text-red-600">
+                      Total Due: {formatCurrency(totalDue)}
+                    </span>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {monthStmts.map((stmt) => (
@@ -206,9 +216,15 @@ export default function StatementsPage() {
                       <p className="text-xs text-gray-600 leading-relaxed mb-2 line-clamp-2">
                         {stmt.email_subject}
                       </p>
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>{stmt.transaction_count} txns</span>
-                        {stmt.email_date && <span>{formatDate(stmt.email_date)}</span>}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">{stmt.transaction_count} txns</span>
+                        {stmt.total_amount_due != null && stmt.total_amount_due > 0 ? (
+                          <span className="font-semibold text-red-600">
+                            Due: {formatCurrency(stmt.total_amount_due)}
+                          </span>
+                        ) : stmt.email_date ? (
+                          <span className="text-gray-400">{formatDate(stmt.email_date)}</span>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -237,7 +253,8 @@ export default function StatementsPage() {
                   <th className="px-5 py-3">Bank</th>
                   <th className="px-5 py-3">Subject</th>
                   <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Transactions</th>
+                  <th className="px-5 py-3">Txns</th>
+                  <th className="px-5 py-3 hidden md:table-cell">Amount Due</th>
                   <th className="px-5 py-3 w-10" />
                 </tr>
               </thead>
@@ -332,6 +349,13 @@ function StatementRow({
           </span>
         </td>
         <td className="px-5 py-3 text-sm text-gray-500">{statement.transaction_count}</td>
+        <td className="px-5 py-3 hidden md:table-cell text-sm">
+          {statement.total_amount_due != null ? (
+            <span className="font-semibold text-red-600">{formatCurrency(statement.total_amount_due)}</span>
+          ) : (
+            <span className="text-gray-300">-</span>
+          )}
+        </td>
         <td className="px-5 py-3">
           <button
             onClick={(e) => {
@@ -347,7 +371,7 @@ function StatementRow({
       </tr>
       {isExpanded && expandedData?.transactions && expandedData.transactions.length > 0 && (
         <tr>
-          <td colSpan={7} className="px-5 py-3 bg-gray-50/50">
+          <td colSpan={8} className="px-5 py-3 bg-gray-50/50">
             <div className="rounded-lg border border-gray-200 overflow-hidden">
               <table className="w-full">
                 <thead>
@@ -386,7 +410,7 @@ function StatementRow({
       )}
       {isExpanded && expandedData?.transactions && expandedData.transactions.length === 0 && (
         <tr>
-          <td colSpan={7} className="px-5 py-6 bg-gray-50/50 text-center text-sm text-gray-400">
+          <td colSpan={8} className="px-5 py-6 bg-gray-50/50 text-center text-sm text-gray-400">
             No transactions in this statement
           </td>
         </tr>

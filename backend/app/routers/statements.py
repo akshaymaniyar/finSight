@@ -85,6 +85,8 @@ async def list_statements(
                 parse_status=stmt.parse_status,
                 parse_error=stmt.parse_error,
                 transaction_count=stmt.transaction_count,
+                total_amount_due=float(stmt.total_amount_due) if stmt.total_amount_due else None,
+                minimum_amount_due=float(stmt.minimum_amount_due) if stmt.minimum_amount_due else None,
                 bank_name=b_name,
                 created_at=stmt.created_at,
             )

@@ -36,6 +36,7 @@ from app.services.gmail_service import (
     extract_pdf_attachments,
 )
 from app.services.pdf_password import generate_passwords, try_open_pdf
+from app.services.due_amount import extract_due_amounts
 from app.schemas.sync import SyncResultResponse
 
 logger = logging.getLogger(__name__)
@@ -441,6 +442,18 @@ async def sync_month(
                                 )
                                 pdf_txn_count += count
                                 logger.info("PDF transactions created: %d from %s", count, filename)
+
+                            # Extract due amounts from CC statements
+                            if stmt_type == "credit_card" or "credit card" in parser.bank_name.lower():
+                                from app.parsers.pdf_utils import extract_text_from_pdf
+                                pdf_text = extract_text_from_pdf(pdf_bytes, working_password)
+                                if pdf_text:
+                                    total_due, min_due = extract_due_amounts(pdf_text)
+                                    if total_due is not None:
+                                        statement.total_amount_due = total_due
+                                        logger.info("Due amount extracted: total=%s, min=%s", total_due, min_due)
+                                    if min_due is not None:
+                                        statement.minimum_amount_due = min_due
 
                     except Exception as pdf_err:
                         logger.exception("Error processing PDF attachments for message %s", gmail_message_id)

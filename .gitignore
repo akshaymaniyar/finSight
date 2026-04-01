@@ -12,3 +12,4 @@ backend/.env
 backend/test_sync.py
 backend/debug_gmail.py
 .claude/
+backend/debug_due_amount.py

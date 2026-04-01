@@ -27,8 +27,8 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/sync" element={<SyncPage />} />
-          <Route path="/cc-statements" element={<StatementsPage />} />
-          <Route path="/bank-statements" element={<StatementsPage />} />
+          <Route path="/cc-statements" element={<StatementsPage key="cc" />} />
+          <Route path="/bank-statements" element={<StatementsPage key="bank" />} />
           <Route path="/statements" element={<StatementsPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />

@@ -109,6 +109,8 @@ export interface Statement {
   statement_month: string;
   parse_status: 'pending' | 'parsed' | 'failed' | 'no_transactions';
   transaction_count: number;
+  total_amount_due: number | null;
+  minimum_amount_due: number | null;
   raw_content: string | null;
   transactions: Transaction[] | null;
   created_at: string;

@@ -13,6 +13,8 @@ class StatementResponse(BaseModel):
     parse_status: str
     parse_error: Optional[str] = None
     transaction_count: int = 0
+    total_amount_due: Optional[float] = None
+    minimum_amount_due: Optional[float] = None
     bank_name: Optional[str] = None
     created_at: Optional[datetime] = None
 
