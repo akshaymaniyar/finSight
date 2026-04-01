@@ -215,24 +215,26 @@ export default function TransactionsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50/50">
-                    <th className="px-5 py-3">Date</th>
-                    <th className="px-5 py-3">Merchant</th>
-                    <th className="px-5 py-3">Amount</th>
-                    <th className="px-5 py-3">Category</th>
-                    <th className="px-5 py-3 hidden md:table-cell">Bank</th>
-                    <th className="px-5 py-3 hidden lg:table-cell">Card Type</th>
+                    <th className="px-4 py-3 w-24">Date</th>
+                    <th className="px-4 py-3">Merchant</th>
+                    <th className="px-4 py-3 w-28">Amount</th>
+                    <th className="px-4 py-3 w-32">Category</th>
+                    <th className="px-3 py-3 w-20 hidden md:table-cell">Bank</th>
+                    <th className="px-3 py-3 w-20 hidden lg:table-cell">Type</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {transactions.map((txn) => (
                     <tr key={txn.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
                         {formatDate(txn.transaction_date)}
                       </td>
-                      <td className="px-5 py-3 text-sm font-medium text-gray-900 max-w-[200px] truncate">
-                        {txn.merchant}
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        <div className="whitespace-normal break-words">
+                          {txn.merchant}
+                        </div>
                       </td>
-                      <td className="px-5 py-3 text-sm font-semibold whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm font-semibold whitespace-nowrap">
                         <span
                           className={
                             txn.transaction_type.toUpperCase() === 'DEBIT' ? 'text-red-600' : 'text-green-600'
@@ -242,7 +244,7 @@ export default function TransactionsPage() {
                           {formatCurrency(Number(txn.amount))}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         {editingId === txn.id ? (
                           <select
                             defaultValue={txn.category}
@@ -267,10 +269,10 @@ export default function TransactionsPage() {
                           />
                         )}
                       </td>
-                      <td className="px-5 py-3 text-sm text-gray-500 hidden md:table-cell">
+                      <td className="px-3 py-3 text-xs text-gray-500 hidden md:table-cell">
                         {txn.bank_name || 'N/A'}
                       </td>
-                      <td className="px-5 py-3 text-sm text-gray-500 hidden lg:table-cell capitalize">
+                      <td className="px-3 py-3 text-xs text-gray-500 hidden lg:table-cell capitalize">
                         {txn.card_type?.replace('_', ' ')}
                       </td>
                     </tr>

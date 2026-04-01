@@ -82,18 +82,39 @@ def _extract_email_address(from_header: str) -> str:
 
 # Order matters: more specific patterns first (credit card before generic bank)
 _FORWARDED_SUBJECT_PATTERNS = [
+    # ICICI
     ("icici bank credit card", "ICICI Bank Credit Card"),
-    ("icici bank statement", "ICICI Bank"),  # account statement, not CC
+    ("icici bank statement", "ICICI Bank"),
+    # HDFC — "hdfc bank statement" (account) must come before the broader "hdfc bank" match
     ("hdfc bank credit card", "HDFC Bank Credit Card"),
     ("hdfc bank statement", "HDFC Bank"),
+    ("hdfc bank", "HDFC Bank Credit Card"),  # "Your HDFC Bank - Infinia Credit Card Statement"
+    # Axis
     ("axis bank credit card", "Axis Bank Credit Card"),
     ("axis bank statement", "Axis Bank"),
+    ("axis bank", "Axis Bank Credit Card"),  # "Axis Bank Ace Credit Card Statement..."
+    # IDFC First — multiple subject patterns
     ("idfc first credit card", "IDFC First Credit Card"),
+    ("first power plus credit card", "IDFC First Credit Card"),
+    ("first wealth credit card", "IDFC First Credit Card"),
+    ("first classic credit card", "IDFC First Credit Card"),
     ("idfc first bank statement", "IDFC First Bank"),
+    # SBI
     ("sbi credit card", "SBI Credit Card"),
+    ("sbi card statement", "SBI Credit Card"),
     ("sbi statement", "State Bank of India"),
+    # Kotak
     ("kotak credit card", "Kotak Mahindra Credit Card"),
     ("kotak bank statement", "Kotak Mahindra Bank"),
+    # Amex
+    ("american express", "American Express"),
+    ("amex", "American Express"),
+    # Yes Bank
+    ("yes bank credit card", "YES Bank Credit Card"),
+    ("yes bank statement", "YES Bank"),
+    # IndusInd
+    ("indusind credit card", "IndusInd Bank Credit Card"),
+    ("indusind bank statement", "IndusInd Bank"),
 ]
 
 
@@ -111,10 +132,13 @@ def find_parser(from_email: str, subject: str) -> Optional[BaseBankParser]:
         if parser.can_parse(bare_email, subject):
             return parser
 
-    # If no direct match, check if this is a forwarded bank statement
+    # If no direct match, check if this is a forwarded/self-sent bank statement
     subject_lower = subject.lower()
-    if subject_lower.startswith("fwd:") or subject_lower.startswith("fw:"):
-        clean_subject = subject_lower.split(":", 1)[1].strip()
+    is_fwd = subject_lower.startswith("fwd:") or subject_lower.startswith("fw:")
+    clean_subject = subject_lower.split(":", 1)[1].strip() if is_fwd else subject_lower
+
+    # Try subject-based matching (for forwarded emails or emails from non-bank senders)
+    if True:
         for pattern, bank_name in _FORWARDED_SUBJECT_PATTERNS:
             if pattern in clean_subject:
                 # Match against exact bank_name in parsers

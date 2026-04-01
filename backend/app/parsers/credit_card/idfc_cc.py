@@ -152,96 +152,63 @@ class IDFCCCParser(BaseBankParser):
     ) -> List[ParsedTransaction]:
         """Parse IDFC First credit card PDF statement.
 
-        IDFC format: Transaction Date | Transaction Details | EMI | FX | Amount
-        Sections: YOUR TRANSACTIONS, PURCHASES, EMIs, etc.
+        Real IDFC format (2025-2026):
+          01 Dec 25 HP PAY CREDIT CARD Convert 5,050.16 DR
+          02 Dec 25 BillDesk BBPS CC Payment/... 1,243.00 CR
+
+        Date format: DD Mon YY (e.g., "01 Dec 25")
+        Amount: AMOUNT DR/CR at end of line
+        Multi-line descriptions possible.
         """
+        text = extract_text_from_pdf(pdf_bytes, password)
+        if not text:
+            return []
+
         transactions: List[ParsedTransaction] = []
 
-        tables = extract_tables_from_pdf(pdf_bytes, password)
-        if tables:
-            for table in tables:
-                for row in table:
-                    if len(row) < 3:
-                        continue
-                    date_str = (row[0] or "").strip()
-                    if not re.match(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", date_str):
-                        continue
+        # IDFC-specific pattern: DD Mon YY [DESCRIPTION] AMOUNT DR/CR
+        # Description may be empty (on multi-line entries) or present
+        idfc_pattern = re.compile(
+            r"(\d{2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2})\s+"
+            r"(.*?)"                          # Description (may be empty)
+            r"([\d,]+\.\d{2})\s+"
+            r"(DR|CR)",
+            re.MULTILINE,
+        )
 
-                    description = (row[1] or "").strip()
-                    txn_type = "DEBIT"
-                    amount_str = ""
+        for match in idfc_pattern.finditer(text):
+            date_str = match.group(1).strip()
+            raw_desc = match.group(2).strip()
+            amount_str = match.group(3).replace(",", "")
+            dr_cr = match.group(4).upper()
 
-                    for cell in reversed(row[2:]):
-                        cell_val = (cell or "").strip()
-                        if not cell_val:
-                            continue
-                        cleaned = cell_val.upper()
-                        if cleaned.endswith("CR"):
-                            txn_type = "CREDIT"
-                            cleaned = cleaned[:-2].strip()
-                        elif cleaned.endswith("DR"):
-                            txn_type = "DEBIT"
-                            cleaned = cleaned[:-2].strip()
-                        cleaned = cleaned.replace(",", "").replace(" ", "")
-                        if re.match(r"^\d+\.?\d*$", cleaned):
-                            amount_str = cleaned
-                            break
+            # Parse "DD Mon YY" date
+            from datetime import datetime as dt
+            txn_date = None
+            try:
+                txn_date = dt.strptime(date_str, "%d %b %y").date()
+            except ValueError:
+                continue
 
-                    if not amount_str:
-                        continue
-                    txn_date = extract_date(date_str)
-                    if not txn_date:
-                        continue
-                    try:
-                        amount = Decimal(amount_str)
-                    except Exception:
-                        continue
+            try:
+                amount = Decimal(amount_str)
+            except Exception:
+                continue
 
-                    if re.search(r"\b(?:PAYMENT|REFUND|CREDIT|CR)\b", description, re.IGNORECASE):
-                        txn_type = "CREDIT"
+            txn_type = "CREDIT" if dr_cr == "CR" else "DEBIT"
 
-                    transactions.append(
-                        ParsedTransaction(
-                            transaction_type=txn_type,
-                            amount=amount,
-                            merchant=description,
-                            raw_description=description,
-                            transaction_date=txn_date,
-                            card_type="CREDIT_CARD",
-                        )
-                    )
+            # Clean description: remove "Convert" suffix (EMI convert prompt)
+            merchant = re.sub(r"\s*Convert\s*$", "", raw_desc).strip()
 
-        if not transactions:
-            text = extract_text_from_pdf(pdf_bytes, password)
-            if text:
-                line_pattern = re.compile(
-                    r"(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\s+(.+?)\s+([\d,]+\.\d{2})\s*(Cr|Dr)?",
-                    re.IGNORECASE,
+            transactions.append(
+                ParsedTransaction(
+                    transaction_type=txn_type,
+                    amount=amount,
+                    merchant=merchant,
+                    raw_description=raw_desc,
+                    transaction_date=txn_date,
+                    card_type="CREDIT_CARD",
                 )
-                for match in line_pattern.finditer(text):
-                    d = match.group(1)
-                    desc = match.group(2).strip()
-                    amt = match.group(3).replace(",", "")
-                    cr_dr = (match.group(4) or "").upper()
-
-                    txn_date = extract_date(d)
-                    if not txn_date:
-                        continue
-                    try:
-                        amount = Decimal(amt)
-                    except Exception:
-                        continue
-
-                    t = "CREDIT" if cr_dr == "CR" else "DEBIT"
-                    transactions.append(
-                        ParsedTransaction(
-                            transaction_type=t,
-                            amount=amount,
-                            merchant=desc,
-                            raw_description=desc,
-                            transaction_date=txn_date,
-                            card_type="CREDIT_CARD",
-                        )
-                    )
+            )
 
         return transactions

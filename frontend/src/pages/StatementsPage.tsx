@@ -12,6 +12,7 @@ export default function StatementsPage() {
   const [bankFilter, setBankFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [rawModalId, setRawModalId] = useState<number | null>(null);
 
@@ -38,14 +39,22 @@ export default function StatementsPage() {
     enabled: rawModalId !== null,
   });
 
-  const statements = data?.statements || [];
+  const allStatements = data?.statements || [];
+
+  // Apply type filter (Credit Card vs Bank Account) on frontend
+  const statements = typeFilter
+    ? allStatements.filter((s) => {
+        const bankLower = (s.bank_name || '').toLowerCase();
+        if (typeFilter === 'credit_card') return bankLower.includes('credit card');
+        if (typeFilter === 'bank_account') return !bankLower.includes('credit card');
+        return true;
+      })
+    : allStatements;
 
   // Extract unique banks and months for filters
-  // Filter out null bank names and PDF-source entries (they're merged with parent)
-  const banks = [...new Set(statements.map((s) => s.bank_name).filter(Boolean))].sort();
-  // statement_month comes as "2026-01-01" — convert to "2026-01" for the API
+  const banks = [...new Set(allStatements.map((s) => s.bank_name).filter(Boolean))].sort();
   const months = [...new Set(
-    statements.map((s) => s.statement_month?.slice(0, 7)).filter(Boolean)
+    allStatements.map((s) => s.statement_month?.slice(0, 7)).filter(Boolean)
   )].sort().reverse();
 
   const toggleExpand = (id: number) => {
@@ -69,6 +78,15 @@ export default function StatementsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        >
+          <option value="">All Types</option>
+          <option value="credit_card">Credit Card Statements</option>
+          <option value="bank_account">Bank Account Statements</option>
+        </select>
         <select
           value={bankFilter}
           onChange={(e) => setBankFilter(e.target.value)}
