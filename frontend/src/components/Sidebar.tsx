@@ -3,6 +3,8 @@ import {
   LayoutDashboard,
   RefreshCw,
   FileText,
+  CreditCard,
+  Building2,
   ArrowLeftRight,
   BarChart3,
   MessageSquare,
@@ -10,15 +12,18 @@ import {
   X,
   IndianRupee,
   UserCircle,
+  Tag,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/sync', icon: RefreshCw, label: 'Sync' },
-  { to: '/statements', icon: FileText, label: 'Statements' },
+  { to: '/cc-statements', icon: CreditCard, label: 'CC Statements' },
+  { to: '/bank-statements', icon: Building2, label: 'Bank Statements' },
   { to: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/categories', icon: Tag, label: 'Categories' },
   { to: '/chat', icon: MessageSquare, label: 'AI Chat' },
   { to: '/profile', icon: UserCircle, label: 'Profile' },
 ];

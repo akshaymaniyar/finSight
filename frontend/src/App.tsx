@@ -10,6 +10,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ChatPage from './pages/ChatPage';
 import ProfilePage from './pages/ProfilePage';
+import CategoriesPage from './pages/CategoriesPage';
 
 export default function App() {
   return (
@@ -26,9 +27,12 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/sync" element={<SyncPage />} />
+          <Route path="/cc-statements" element={<StatementsPage />} />
+          <Route path="/bank-statements" element={<StatementsPage />} />
           <Route path="/statements" element={<StatementsPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/chat" element={<ChatPage />} />
         </Route>
       </Routes>

@@ -12,5 +12,5 @@ class Base(DeclarativeBase):
 
 
 def create_tables():
-    from app.models import user, bank_account, statement, transaction, sync_history, chat_history  # noqa
+    from app.models import user, bank_account, statement, transaction, sync_history, chat_history, category  # noqa
     Base.metadata.create_all(bind=engine)
