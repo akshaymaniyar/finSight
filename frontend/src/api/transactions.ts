@@ -33,7 +33,21 @@ export async function getTransactionSummary(): Promise<TransactionSummary> {
 
 export async function updateTransaction(
   id: number,
-  updates: { category?: string; sub_category?: string; is_excluded?: boolean }
-): Promise<void> {
-  await apiClient.put(`/api/transactions/${id}`, updates);
+  updates: {
+    category?: string;
+    sub_category?: string;
+    is_excluded?: boolean;
+    apply_to_all?: boolean;
+    save_rule?: boolean;
+  }
+): Promise<{ transaction: unknown; applied_to_count: number }> {
+  const { data } = await apiClient.put(`/api/transactions/${id}`, updates);
+  return data;
+}
+
+export async function getMatchingTransactions(
+  id: number
+): Promise<{ merchant: string; count: number; categories: string[] }> {
+  const { data } = await apiClient.get(`/api/transactions/${id}/matching`);
+  return data;
 }

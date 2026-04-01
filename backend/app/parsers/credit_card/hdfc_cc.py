@@ -226,8 +226,8 @@ class HDFCCCParser(BaseBankParser):
 
             # Clean description: remove trailing reward points like "+ 25" or "- 440 +"
             merchant = re.sub(r"\s*[-+]\s*\d*\s*[-+]?\s*$", "", raw_desc).strip()
-            # Remove city at end (words in ALL CAPS at very end)
-            # Keep the full description as raw_description
+            # Remove "EMI " prefix — these are just regular purchases on EMI
+            merchant = re.sub(r"^EMI\s+", "", merchant)
 
             transactions.append(
                 ParsedTransaction(

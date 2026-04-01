@@ -9,7 +9,7 @@ funds, and Zerodha transactions.
 from __future__ import annotations
 
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +65,9 @@ CATEGORY_RULES: Dict[str, list[str]] = {
         "rent", "house rent", "flat rent", "pg rent", "rental",
         "nobroker", "magicbricks", "99acres",
     ],
-    "EMI": [
-        "emi", "loan", "equated monthly", "bajaj finserv", "home credit",
+    "Loans": [
+        "loan", "bajaj finserv", "home credit",
         "hdfc ltd", "lic housing", "pnb housing", "loan repayment",
-        "auto debit emi",
     ],
     "Insurance": [
         "insurance", "lic ", "max life", "hdfc life", "icici prudential",
@@ -131,6 +130,7 @@ def categorize_transaction(
     description: str = "",
     card_type: str = "ACCOUNT",
     transaction_type: str = "DEBIT",
+    user_rules: Optional[list] = None,
 ) -> dict:
     """Categorize a transaction based on merchant name and raw description.
 
@@ -155,6 +155,17 @@ def categorize_transaction(
         "is_self_transfer": False,
         "is_excluded": False,
     }
+
+    # --- Check user-defined rules first (highest priority) ---
+    if user_rules:
+        merchant_lower = (merchant or "").strip().lower()
+        for rule in user_rules:
+            if rule.merchant_pattern and (
+                rule.merchant_pattern in merchant_lower or merchant_lower == rule.merchant_pattern
+            ):
+                result["category"] = rule.category
+                result["sub_category"] = rule.sub_category
+                return result
 
     # --- Credit card CREDIT transactions: never income ---
     if card_type == "CREDIT_CARD" and transaction_type == "CREDIT":

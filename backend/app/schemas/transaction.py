@@ -40,3 +40,11 @@ class TransactionUpdateRequest(BaseModel):
     category: Optional[str] = None
     sub_category: Optional[str] = None
     is_excluded: Optional[bool] = None
+    apply_to_all: bool = False  # Apply category to all matching merchant transactions
+    save_rule: bool = False  # Save as a persistent rule for future categorization
+
+
+class MatchingTransactionsResponse(BaseModel):
+    merchant: str
+    count: int
+    categories: List[str]

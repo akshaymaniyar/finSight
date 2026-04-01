@@ -82,11 +82,11 @@ DEFAULT_CATEGORIES = [
         ("Term Insurance", "term insurance,term plan"),
         ("Other", "insurance,premium,policy,policybazaar,acko"),
     ]),
-    ("EMI & Loans", "credit-card", "#FFB74D", False, [
-        ("Credit Card EMI", "emi,credit card emi,cc emi"),
+    ("Loans", "credit-card", "#FFB74D", False, [
         ("Personal Loan", "personal loan,loan repayment"),
         ("Education Loan", "education loan,student loan"),
-        ("Other", "loan,emi,equated monthly,bajaj finserv,home credit"),
+        ("Home Loan", "home loan,housing loan,mortgage"),
+        ("Other", "loan,equated monthly,bajaj finserv,home credit"),
     ]),
     ("Investments", "trending-up", "#66BB6A", False, [
         ("Mutual Funds", "sip,groww,kuvera,coin,mf purchase,mutual fund,nippon,hdfc mf,icici pru,aditya birla,dsp,kotak mf,axis mf,tata mf,parag parikh"),

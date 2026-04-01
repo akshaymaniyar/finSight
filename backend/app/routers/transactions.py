@@ -213,6 +213,33 @@ async def get_transaction_summary(
     }
 
 
+@router.get("/{transaction_id}/matching")
+async def get_matching_transactions(
+    transaction_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get count of transactions with the same merchant name (for apply-to-all preview)."""
+    txn = db.query(Transaction).filter(
+        Transaction.id == transaction_id,
+        Transaction.user_id == current_user.id,
+    ).first()
+    if not txn or not txn.merchant:
+        return {"merchant": "", "count": 0, "categories": []}
+
+    merchant_lower = txn.merchant.strip().lower()
+    matching = (
+        db.query(Transaction)
+        .filter(
+            Transaction.user_id == current_user.id,
+            func.lower(Transaction.merchant) == merchant_lower,
+        )
+        .all()
+    )
+    categories = list(set(t.category for t in matching if t.category))
+    return {"merchant": txn.merchant, "count": len(matching), "categories": categories}
+
+
 @router.put("/{transaction_id}")
 async def update_transaction(
     transaction_id: int,
@@ -220,8 +247,9 @@ async def update_transaction(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update a transaction's category, sub_category, or is_excluded flag."""
-    logger.info("Transaction update request: user_id=%s, transaction_id=%s", current_user.id, transaction_id)
+    """Update a transaction's category. Optionally apply to all matching merchants and save as a rule."""
+    logger.info("Transaction update: user_id=%s, txn_id=%s, apply_all=%s, save_rule=%s",
+                current_user.id, transaction_id, body.apply_to_all, body.save_rule)
     txn = (
         db.query(Transaction)
         .filter(
@@ -241,6 +269,52 @@ async def update_transaction(
     if body.is_excluded is not None:
         txn.is_excluded = body.is_excluded
 
+    # Apply to all matching merchant transactions
+    updated_count = 0
+    if body.apply_to_all and body.category and txn.merchant:
+        merchant_lower = txn.merchant.strip().lower()
+        matching = (
+            db.query(Transaction)
+            .filter(
+                Transaction.user_id == current_user.id,
+                func.lower(Transaction.merchant) == merchant_lower,
+                Transaction.id != txn.id,
+            )
+            .all()
+        )
+        for m in matching:
+            m.category = body.category
+            if body.sub_category is not None:
+                m.sub_category = body.sub_category
+            updated_count += 1
+        logger.info("Applied category '%s' to %d matching transactions for merchant '%s'",
+                    body.category, updated_count, txn.merchant)
+
+    # Save as persistent rule for future auto-categorization
+    if body.save_rule and body.category and txn.merchant:
+        from app.models.category_rule import CategoryRule
+        merchant_pattern = txn.merchant.strip().lower()
+        existing_rule = (
+            db.query(CategoryRule)
+            .filter(
+                CategoryRule.user_id == current_user.id,
+                CategoryRule.merchant_pattern == merchant_pattern,
+            )
+            .first()
+        )
+        if existing_rule:
+            existing_rule.category = body.category
+            existing_rule.sub_category = body.sub_category
+        else:
+            rule = CategoryRule(
+                user_id=current_user.id,
+                merchant_pattern=merchant_pattern,
+                category=body.category,
+                sub_category=body.sub_category,
+            )
+            db.add(rule)
+        logger.info("Saved category rule: '%s' -> '%s'", merchant_pattern, body.category)
+
     db.commit()
     db.refresh(txn)
 
@@ -251,24 +325,27 @@ async def update_transaction(
         if acct:
             bank_name = acct.bank_name
 
-    return TransactionResponse(
-        id=txn.id,
-        transaction_type=txn.transaction_type,
-        amount=txn.amount,
-        merchant=txn.merchant,
-        raw_description=txn.raw_description,
-        category=txn.category,
-        sub_category=txn.sub_category,
-        transaction_date=txn.transaction_date,
-        reference_id=txn.reference_id,
-        balance_after=txn.balance_after,
-        is_self_transfer=txn.is_self_transfer,
-        is_investment=txn.is_investment,
-        is_mutual_fund=txn.is_mutual_fund,
-        is_zerodha=txn.is_zerodha,
-        is_excluded=txn.is_excluded,
-        card_type=txn.card_type,
-        bank_name=bank_name,
-        statement_id=txn.statement_id,
-        created_at=txn.created_at,
-    )
+    return {
+        "transaction": TransactionResponse(
+            id=txn.id,
+            transaction_type=txn.transaction_type,
+            amount=txn.amount,
+            merchant=txn.merchant,
+            raw_description=txn.raw_description,
+            category=txn.category,
+            sub_category=txn.sub_category,
+            transaction_date=txn.transaction_date,
+            reference_id=txn.reference_id,
+            balance_after=txn.balance_after,
+            is_self_transfer=txn.is_self_transfer,
+            is_investment=txn.is_investment,
+            is_mutual_fund=txn.is_mutual_fund,
+            is_zerodha=txn.is_zerodha,
+            is_excluded=txn.is_excluded,
+            card_type=txn.card_type,
+            bank_name=bank_name,
+            statement_id=txn.statement_id,
+            created_at=txn.created_at,
+        ),
+        "applied_to_count": updated_count,
+    }

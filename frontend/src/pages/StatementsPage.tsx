@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { FileText, CreditCard, Building2, ChevronDown, ChevronUp, Eye, X, BarChart3, List } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { FileText, CreditCard, Building2, ChevronDown, ChevronUp, Eye, X, BarChart3, List, Edit2, Check } from 'lucide-react';
+import { updateTransaction, getMatchingTransactions } from '../api/transactions';
 import { getStatements, getStatement } from '../api/statements';
 import type { Statement } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -372,39 +373,7 @@ function StatementRow({
       {isExpanded && expandedData?.transactions && expandedData.transactions.length > 0 && (
         <tr>
           <td colSpan={8} className="px-5 py-3 bg-gray-50/50">
-            <div className="rounded-lg border border-gray-200 overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-xs font-medium text-gray-500 bg-gray-100/50">
-                    <th className="px-4 py-2">Date</th>
-                    <th className="px-4 py-2">Merchant</th>
-                    <th className="px-4 py-2">Amount</th>
-                    <th className="px-4 py-2">Category</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {expandedData.transactions.map((txn) => (
-                    <tr key={txn.id}>
-                      <td className="px-4 py-2 text-xs text-gray-500">{formatDate(txn.transaction_date)}</td>
-                      <td className="px-4 py-2 text-xs font-medium text-gray-800">{txn.merchant}</td>
-                      <td className="px-4 py-2 text-xs font-semibold">
-                        <span
-                          className={
-                            txn.transaction_type.toUpperCase() === 'DEBIT' ? 'text-red-600' : 'text-green-600'
-                          }
-                        >
-                          {txn.transaction_type.toUpperCase() === 'DEBIT' ? '-' : '+'}
-                          {formatCurrency(Number(txn.amount))}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <CategoryBadge category={txn.category} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ExpandedTransactions transactions={expandedData.transactions} />
           </td>
         </tr>
       )}
@@ -414,6 +383,166 @@ function StatementRow({
             No transactions in this statement
           </td>
         </tr>
+      )}
+    </>
+  );
+}
+
+
+const CATEGORIES = [
+  'Food & Dining', 'Shopping', 'Groceries', 'Housing', 'Transportation',
+  'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Education',
+  'Insurance', 'Loans', 'Investments', 'Subscriptions', 'Family & Social',
+  'Domestic Help', 'Children', 'ATM & Cash', 'Salary & Income',
+  'Investment Returns', 'Refunds & Cashback', 'Transfers', 'Uncategorized',
+];
+
+
+function ExpandedTransactions({ transactions }: { transactions: import('../types').Transaction[] }) {
+  const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [showApplyAll, setShowApplyAll] = useState<{
+    txnId: number;
+    merchant: string;
+    category: string;
+    matchCount: number;
+  } | null>(null);
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, ...payload }: Parameters<typeof updateTransaction>[1] & { id: number }) =>
+      updateTransaction(id, payload),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['statement-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+
+      // If there are matching transactions, offer to apply to all
+      if (data.applied_to_count === 0 && variables.category) {
+        // Check how many matching exist
+        getMatchingTransactions(variables.id).then((match) => {
+          if (match.count > 1) {
+            setShowApplyAll({
+              txnId: variables.id,
+              merchant: match.merchant,
+              category: variables.category!,
+              matchCount: match.count - 1, // exclude current
+            });
+          }
+        });
+      }
+      setEditingId(null);
+    },
+  });
+
+  const applyAllMut = useMutation({
+    mutationFn: ({ id, category }: { id: number; category: string }) =>
+      updateTransaction(id, { category, apply_to_all: true, save_rule: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['statement-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setShowApplyAll(null);
+    },
+  });
+
+  const handleCategoryChange = (txnId: number, category: string) => {
+    setSelectedCategory(category);
+    updateMut.mutate({ id: txnId, category });
+  };
+
+  return (
+    <>
+      <div className="rounded-lg border border-gray-200 overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left text-xs font-medium text-gray-500 bg-gray-100/50">
+              <th className="px-4 py-2">Date</th>
+              <th className="px-4 py-2">Merchant</th>
+              <th className="px-4 py-2">Amount</th>
+              <th className="px-4 py-2">Category</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {transactions.map((txn) => (
+              <tr key={txn.id}>
+                <td className="px-4 py-2 text-xs text-gray-500">{formatDate(txn.transaction_date)}</td>
+                <td className="px-4 py-2 text-xs font-medium text-gray-800 whitespace-normal break-words max-w-xs">
+                  {txn.merchant}
+                </td>
+                <td className="px-4 py-2 text-xs font-semibold whitespace-nowrap">
+                  <span
+                    className={
+                      txn.transaction_type.toUpperCase() === 'DEBIT' ? 'text-red-600' : 'text-green-600'
+                    }
+                  >
+                    {txn.transaction_type.toUpperCase() === 'DEBIT' ? '-' : '+'}
+                    {formatCurrency(Number(txn.amount))}
+                  </span>
+                </td>
+                <td className="px-4 py-2">
+                  {editingId === txn.id ? (
+                    <select
+                      defaultValue={txn.category}
+                      onChange={(e) => handleCategoryChange(txn.id, e.target.value)}
+                      onBlur={() => setEditingId(null)}
+                      autoFocus
+                      className="px-2 py-1 border border-indigo-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-1.5 group">
+                      <CategoryBadge category={txn.category} />
+                      <button
+                        onClick={() => setEditingId(txn.id)}
+                        className="p-0.5 text-gray-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Change category"
+                      >
+                        <Edit2 size={11} />
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Apply to all dialog */}
+      {showApplyAll && (
+        <div className="mt-3 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+          <p className="text-sm text-indigo-800 mb-2">
+            Apply <strong>{showApplyAll.category}</strong> to all{' '}
+            <strong>{showApplyAll.matchCount}</strong> other transactions from{' '}
+            <strong>{showApplyAll.merchant}</strong>?
+          </p>
+          <p className="text-xs text-indigo-600 mb-3">
+            This will also save the rule for future auto-categorization.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() =>
+                applyAllMut.mutate({
+                  id: showApplyAll.txnId,
+                  category: showApplyAll.category,
+                })
+              }
+              disabled={applyAllMut.isPending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              <Check size={12} />
+              {applyAllMut.isPending ? 'Applying...' : `Yes, apply to all ${showApplyAll.matchCount}`}
+            </button>
+            <button
+              onClick={() => setShowApplyAll(null)}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+            >
+              No, just this one
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

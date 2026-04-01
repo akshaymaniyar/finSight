@@ -26,6 +26,7 @@ from app.models.statement import Statement
 from app.models.sync_history import SyncHistory
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.models.category_rule import CategoryRule
 from app.parsers.registry import find_parser, find_parser_by_bank_name
 from app.services.auth_service import get_valid_access_token
 from app.services.categorization import categorize_transaction
@@ -137,6 +138,7 @@ def _process_parsed_transactions(
     parsed_transactions: list,
     parser,
     month_date: date,
+    user_rules: Optional[list] = None,
 ) -> int:
     """Insert parsed transactions into DB. Returns count of transactions created."""
     account_type_map = {
@@ -164,6 +166,7 @@ def _process_parsed_transactions(
             description=parsed_txn.raw_description,
             card_type=parsed_txn.card_type,
             transaction_type=parsed_txn.transaction_type,
+            user_rules=user_rules,
         )
 
         txn_date = parsed_txn.transaction_date or month_date
@@ -259,6 +262,9 @@ async def sync_month(
 
         access_token = await get_valid_access_token(user, db)
         logger.info("Token refresh status: access token obtained for user_id=%s", user_id)
+
+        # Load user's category rules for auto-categorization
+        user_rules = db.query(CategoryRule).filter(CategoryRule.user_id == user_id).all()
 
         # If force resync, delete existing statements for this month
         # CASCADE will delete associated transactions
@@ -367,7 +373,7 @@ async def sync_month(
                 txn_count = 0
                 if parsed_transactions:
                     txn_count = _process_parsed_transactions(
-                        db, user_id, statement, parsed_transactions, parser, month_date
+                        db, user_id, statement, parsed_transactions, parser, month_date, user_rules
                     )
 
                 # ---- PHASE 2: Parse PDF attachments ----
@@ -438,7 +444,7 @@ async def sync_month(
                             if pdf_transactions:
                                 # Attach PDF transactions to the parent email statement
                                 count = _process_parsed_transactions(
-                                    db, user_id, statement, pdf_transactions, parser, month_date
+                                    db, user_id, statement, pdf_transactions, parser, month_date, user_rules
                                 )
                                 pdf_txn_count += count
                                 logger.info("PDF transactions created: %d from %s", count, filename)
