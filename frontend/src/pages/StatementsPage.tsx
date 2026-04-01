@@ -361,10 +361,27 @@ function StatementRow({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onViewRaw();
+              // Open decrypted PDF in new tab
+              const token = localStorage.getItem('finsight_token');
+              fetch(`/api/pdf/${statement.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              })
+                .then((res) => {
+                  if (res.ok) return res.blob();
+                  // Fallback to raw content modal if PDF not found
+                  onViewRaw();
+                  return null;
+                })
+                .then((blob) => {
+                  if (blob) {
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                  }
+                })
+                .catch(() => onViewRaw());
             }}
             className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-            title="View raw content"
+            title="View statement PDF"
           >
             <Eye size={16} />
           </button>

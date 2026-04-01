@@ -18,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import auth, sync, statements, transactions, analytics, chat, profile, categories  # noqa
+from app.routers import auth, sync, statements, transactions, analytics, chat, profile, categories, pdf  # noqa
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
@@ -28,6 +28,7 @@ app.include_router(statements.router, prefix="/api/statements", tags=["statement
 app.include_router(transactions.router, prefix="/api/transactions", tags=["transactions"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(pdf.router, prefix="/api/pdf", tags=["pdf"])
 
 
 @app.on_event("startup")
