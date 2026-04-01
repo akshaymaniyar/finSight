@@ -42,15 +42,17 @@ async def category_breakdown(
 @router.get("/monthly-trend")
 async def monthly_trend(
     months: int = Query(12, ge=1, le=60, description="Number of months to look back"),
+    card_type: Optional[str] = Query(None, description="ACCOUNT, CREDIT_CARD, or DEBIT_CARD"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get monthly income/expense trend."""
-    logger.info("Analytics monthly-trend: user_id=%s, months=%d", current_user.id, months)
+    logger.info("Analytics monthly-trend: user_id=%s, months=%d, card_type=%s", current_user.id, months, card_type)
     data = analytics_service.get_monthly_trend(
         user_id=current_user.id,
         db=db,
         months=months,
+        card_type=card_type.upper() if card_type else None,
     )
     return {"months": data}
 
@@ -58,15 +60,17 @@ async def monthly_trend(
 @router.get("/top-merchants")
 async def top_merchants(
     limit: int = Query(20, ge=1, le=100, description="Number of merchants to return"),
+    card_type: Optional[str] = Query(None, description="ACCOUNT, CREDIT_CARD, or DEBIT_CARD"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get top merchants by total spend."""
-    logger.info("Analytics top-merchants: user_id=%s, limit=%d", current_user.id, limit)
+    logger.info("Analytics top-merchants: user_id=%s, limit=%d, card_type=%s", current_user.id, limit, card_type)
     data = analytics_service.get_top_merchants(
         user_id=current_user.id,
         db=db,
         limit=limit,
+        card_type=card_type.upper() if card_type else None,
     )
     return {"merchants": data}
 

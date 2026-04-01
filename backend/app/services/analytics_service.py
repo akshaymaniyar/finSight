@@ -77,14 +77,22 @@ def get_monthly_trend(
     user_id: int,
     db: Session,
     months: int = 12,
+    card_type: Optional[str] = None,
 ) -> list[dict]:
     """Get monthly income/expense trend for the last N months.
 
     Returns a list of dicts ordered by month ascending:
         {month, total_spent, total_income, count}
     """
-    logger.info("get_monthly_trend: user_id=%s, months=%d", user_id, months)
+    logger.info("get_monthly_trend: user_id=%s, months=%d, card_type=%s", user_id, months, card_type)
     cutoff = date.today() - relativedelta(months=months)
+
+    filters = [
+        Transaction.user_id == user_id,
+        Transaction.transaction_date >= cutoff,
+    ]
+    if card_type:
+        filters.append(Transaction.card_type == card_type)
 
     rows = (
         db.query(
@@ -109,10 +117,7 @@ def get_monthly_trend(
             ).label("total_income"),
             func.count(Transaction.id).label("count"),
         )
-        .filter(
-            Transaction.user_id == user_id,
-            Transaction.transaction_date >= cutoff,
-        )
+        .filter(and_(*filters))
         .group_by(func.date_format(Transaction.transaction_date, "%Y-%m"))
         .order_by(func.date_format(Transaction.transaction_date, "%Y-%m").asc())
         .all()
@@ -133,26 +138,27 @@ def get_top_merchants(
     user_id: int,
     db: Session,
     limit: int = 20,
+    card_type: Optional[str] = None,
 ) -> list[dict]:
-    """Get top merchants by total spend.
+    """Get top merchants by total spend."""
+    logger.info("get_top_merchants: user_id=%s, limit=%d, card_type=%s", user_id, limit, card_type)
+    filters = [
+        Transaction.user_id == user_id,
+        Transaction.transaction_type == "DEBIT",
+        Transaction.is_excluded == False,
+        Transaction.merchant != None,
+        Transaction.merchant != "",
+    ]
+    if card_type:
+        filters.append(Transaction.card_type == card_type)
 
-    Returns a list of dicts sorted by total_amount descending:
-        {merchant, total_amount, count}
-    """
-    logger.info("get_top_merchants: user_id=%s, limit=%d", user_id, limit)
     rows = (
         db.query(
             Transaction.merchant,
             func.sum(Transaction.amount).label("total_amount"),
             func.count(Transaction.id).label("count"),
         )
-        .filter(
-            Transaction.user_id == user_id,
-            Transaction.transaction_type == "DEBIT",
-            Transaction.is_excluded == False,
-            Transaction.merchant != None,
-            Transaction.merchant != "",
-        )
+        .filter(and_(*filters))
         .group_by(Transaction.merchant)
         .order_by(func.sum(Transaction.amount).desc())
         .limit(limit)

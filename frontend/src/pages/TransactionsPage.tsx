@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getTransactions, updateTransaction } from '../api/transactions';
@@ -43,9 +44,17 @@ const PAGE_SIZE = 25;
 
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+
+  // Pre-populate filters from URL query params (from analytics click-through)
+  const urlCategory = searchParams.get('category') || '';
+  const urlCardType = searchParams.get('card_type') || '';
+
   const [filters, setFilters] = useState<TransactionFilters>({
     limit: PAGE_SIZE,
     offset: 0,
+    category: urlCategory || undefined,
+    card_type: urlCardType || undefined,
   });
   const [search, setSearch] = useState('');
   const [hideSelfTransfers, setHideSelfTransfers] = useState(false);
