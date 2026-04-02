@@ -38,6 +38,7 @@ from app.services.gmail_service import (
     extract_pdf_attachments,
 )
 from app.services.pdf_password import generate_passwords, try_open_pdf
+from app.services.statement_period import extract_statement_month
 from app.services.due_amount import extract_due_amounts
 from app.schemas.sync import SyncResultResponse
 
@@ -395,17 +396,6 @@ async def sync_month(
                         for filename, pdf_bytes in pdf_attachments:
                             logger.info("Processing PDF: filename=%s, size=%d bytes", filename, len(pdf_bytes))
 
-                            # Save PDF to disk for debugging
-                            try:
-                                save_dir = SAVED_ATTACHMENTS_DIR / month_str / str(user_id)
-                                save_dir.mkdir(parents=True, exist_ok=True)
-                                safe_name = re.sub(r'[^\w.\-]', '_', filename)
-                                save_path = save_dir / f"{gmail_message_id[:8]}_{safe_name}"
-                                save_path.write_bytes(pdf_bytes)
-                                logger.info("Saved PDF to disk: %s", save_path)
-                            except Exception as save_err:
-                                logger.warning("Failed to save PDF to disk: %s", save_err)
-
                             # Determine statement type and bank from context
                             stmt_type = _detect_statement_type(filename, subject)
                             card_last4 = _extract_card_last4(filename, subject, body_text)
@@ -427,8 +417,7 @@ async def sync_month(
                             working_password, success = try_open_pdf(pdf_bytes, passwords)
                             if not success:
                                 logger.warning(
-                                    "Cannot open PDF %s - all %d passwords failed. "
-                                    "User may need to update their profile.",
+                                    "Cannot open PDF %s - all %d passwords failed.",
                                     filename, len(passwords),
                                 )
                                 if not parsed_transactions:
@@ -438,6 +427,43 @@ async def sync_month(
                                     )
                                 continue
 
+                            # Extract text for period detection and due amounts
+                            from app.parsers.pdf_utils import extract_text_from_pdf
+                            pdf_text = extract_text_from_pdf(pdf_bytes, working_password)
+
+                            # Save decrypted PDF to disk
+                            try:
+                                save_dir = SAVED_ATTACHMENTS_DIR / month_str / str(user_id)
+                                save_dir.mkdir(parents=True, exist_ok=True)
+                                safe_name = re.sub(r'[^\w.\-]', '_', filename)
+                                save_path = save_dir / f"{gmail_message_id[:8]}_{safe_name}"
+                                # Save decrypted version using pikepdf
+                                try:
+                                    import io as _io
+                                    from pikepdf import Pdf, PasswordError
+                                    try:
+                                        src = Pdf.open(_io.BytesIO(pdf_bytes), password=working_password)
+                                    except PasswordError:
+                                        src = Pdf.open(_io.BytesIO(pdf_bytes))
+                                    out = _io.BytesIO()
+                                    src.save(out)
+                                    src.close()
+                                    save_path.write_bytes(out.getvalue())
+                                    logger.info("Saved decrypted PDF: %s", save_path)
+                                except Exception:
+                                    # Fallback: save encrypted version
+                                    save_path.write_bytes(pdf_bytes)
+                                    logger.info("Saved PDF (encrypted): %s", save_path)
+                            except Exception as save_err:
+                                logger.warning("Failed to save PDF to disk: %s", save_err)
+
+                            # Extract statement month from PDF content
+                            if pdf_text:
+                                extracted_month = extract_statement_month(pdf_text, subject)
+                                if extracted_month:
+                                    statement.statement_month = extracted_month
+                                    logger.info("Statement month from PDF: %s", extracted_month)
+
                             # Parse the PDF
                             pdf_transactions = parser.parse_pdf(pdf_bytes, working_password)
                             logger.info(
@@ -446,24 +472,22 @@ async def sync_month(
                             )
 
                             if pdf_transactions:
-                                # Attach PDF transactions to the parent email statement
                                 count = _process_parsed_transactions(
-                                    db, user_id, statement, pdf_transactions, parser, month_date, user_rules
+                                    db, user_id, statement, pdf_transactions, parser,
+                                    statement.statement_month or month_date,
+                                    user_rules, db_categories,
                                 )
                                 pdf_txn_count += count
                                 logger.info("PDF transactions created: %d from %s", count, filename)
 
                             # Extract due amounts from CC statements
-                            if stmt_type == "credit_card" or "credit card" in parser.bank_name.lower():
-                                from app.parsers.pdf_utils import extract_text_from_pdf
-                                pdf_text = extract_text_from_pdf(pdf_bytes, working_password)
-                                if pdf_text:
-                                    total_due, min_due = extract_due_amounts(pdf_text)
-                                    if total_due is not None:
-                                        statement.total_amount_due = total_due
-                                        logger.info("Due amount extracted: total=%s, min=%s", total_due, min_due)
-                                    if min_due is not None:
-                                        statement.minimum_amount_due = min_due
+                            if pdf_text and (stmt_type == "credit_card" or "credit card" in parser.bank_name.lower()):
+                                total_due, min_due = extract_due_amounts(pdf_text)
+                                if total_due is not None:
+                                    statement.total_amount_due = total_due
+                                    logger.info("Due amount: total=%s, min=%s", total_due, min_due)
+                                if min_due is not None:
+                                    statement.minimum_amount_due = min_due
 
                     except Exception as pdf_err:
                         logger.exception("Error processing PDF attachments for message %s", gmail_message_id)
