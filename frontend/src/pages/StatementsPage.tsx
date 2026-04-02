@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, CreditCard, Building2, ChevronDown, ChevronUp, Eye, X, BarChart3, List, Edit2, Check, FileDown } from 'lucide-react';
+import { FileText, CreditCard, Building2, ChevronDown, ChevronUp, ChevronRight, Eye, X, BarChart3, List, Edit2, Check } from 'lucide-react';
 import { updateTransaction, getMatchingTransactions } from '../api/transactions';
 import CategorySelect from '../components/CategorySelect';
 import { getStatements, getStatement } from '../api/statements';
@@ -231,7 +231,7 @@ export default function StatementsPage() {
               <thead>
                 <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50/50">
                   <th className="px-5 py-3 w-8" />
-                  <th className="px-5 py-3">Date</th>
+                  <th className="px-5 py-3">Statement Month</th>
                   <th className="px-5 py-3">Bank</th>
                   <th className="px-5 py-3">Subject</th>
                   <th className="px-5 py-3">Status</th>
@@ -313,7 +313,7 @@ function StatementRow({
           )}
         </td>
         <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
-          {formatDate(statement.email_date)}
+          {statement.statement_month ? formatMonth(statement.statement_month.slice(0, 7)) : formatDate(statement.email_date)}
         </td>
         <td className="px-5 py-3 text-sm font-medium text-gray-900">{statement.bank_name}</td>
         <td className="px-5 py-3 text-sm text-gray-600">
