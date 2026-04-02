@@ -367,21 +367,7 @@ async def sync_month(
                     db.commit()
                     continue
 
-                # ---- PHASE 1: Parse the email body ----
-                parsed_transactions = parser.parse_email(subject, body_html, body_text)
-                logger.info(
-                    "Email body parse: parser=%s, transactions=%d",
-                    parser.__class__.__name__,
-                    len(parsed_transactions) if parsed_transactions else 0,
-                )
-
-                txn_count = 0
-                if parsed_transactions:
-                    txn_count = _process_parsed_transactions(
-                        db, user_id, statement, parsed_transactions, parser, month_date, user_rules, db_categories
-                    )
-
-                # ---- PHASE 2: Parse PDF attachments ----
+                # ---- PHASE 1: Try PDF attachments first (authoritative source) ----
                 pdf_txn_count = 0
                 if has_attachments:
                     try:
@@ -491,16 +477,30 @@ async def sync_month(
 
                     except Exception as pdf_err:
                         logger.exception("Error processing PDF attachments for message %s", gmail_message_id)
-                        if not parsed_transactions:
-                            statement.parse_error = f"PDF processing error: {str(pdf_err)[:200]}"
+                        statement.parse_error = f"PDF processing error: {str(pdf_err)[:200]}"
 
-                total_txn = txn_count + pdf_txn_count
+                # ---- PHASE 2: Email body fallback (only if no PDF transactions) ----
+                email_txn_count = 0
+                if pdf_txn_count == 0:
+                    parsed_transactions = parser.parse_email(subject, body_html, body_text)
+                    logger.info(
+                        "Email body parse (fallback): parser=%s, transactions=%d",
+                        parser.__class__.__name__,
+                        len(parsed_transactions) if parsed_transactions else 0,
+                    )
+                    if parsed_transactions:
+                        email_txn_count = _process_parsed_transactions(
+                            db, user_id, statement, parsed_transactions, parser,
+                            statement.statement_month or month_date,
+                            user_rules, db_categories,
+                        )
+
+                total_txn = pdf_txn_count + email_txn_count
                 statement.parse_status = "PARSED"
                 statement.transaction_count = total_txn
-                # Update source_type if we parsed PDFs too
                 if pdf_txn_count > 0:
                     statement.source_type = "EMAIL+PDF"
-                if total_txn == 0 and not parsed_transactions:
+                if total_txn == 0:
                     logger.info(
                         "No transactions from email or PDF for message_id=%s, parser=%s",
                         gmail_message_id, parser.__class__.__name__,

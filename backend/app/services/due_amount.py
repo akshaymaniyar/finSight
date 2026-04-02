@@ -67,13 +67,22 @@ def extract_due_amounts(text: str) -> Tuple[Optional[Decimal], Optional[Decimal]
         # ===================== TOTAL AMOUNT DUE =====================
         if total_due is None:
 
-            # IDFC: "Total Amount Due = r5,050.16 DR"
+            # Kotak: "TotalAmountDue(TAD) Rs.2,514.09" (no spaces)
             m = re.search(
-                r'Total\s+Amount\s+Due\s*[=:]\s*[`₹CrRs.]*\s*([\d,]+\.?\d*)\s*(?:DR)?',
+                r'TotalAmountDue\(?(?:TAD|Payable)?\)?\s*Rs\.?\s*([\d,]+\.\d{2})',
                 line_stripped, re.IGNORECASE,
             )
             if m:
                 total_due = _clean_amount(m.group(1))
+
+            # IDFC: "Total Amount Due = r5,050.16 DR"
+            if total_due is None:
+                m = re.search(
+                    r'Total\s+Amount\s+Due\s*[=:]\s*[`₹CrRs.]*\s*([\d,]+\.?\d*)\s*(?:DR)?',
+                    line_stripped, re.IGNORECASE,
+                )
+                if m:
+                    total_due = _clean_amount(m.group(1))
 
             # HDFC/ICICI/Axis: "TOTAL AMOUNT DUE" or "TOTAL PAYMENT DUE" as header
             if total_due is None and (
@@ -102,8 +111,17 @@ def extract_due_amounts(text: str) -> Tuple[Optional[Decimal], Optional[Decimal]
         # ===================== MINIMUM AMOUNT DUE =====================
         if min_due is None:
 
-            # Direct match: "Minimum Amount Due" or "MINIMUM DUE" followed by amount
+            # Kotak: "MinimumAmountDue(MAD) Rs.710.21" (no spaces)
             m = re.search(
+                r'MinimumAmountDue\(?(?:MAD)?\)?\s*Rs\.?\s*([\d,]+\.\d{2})',
+                line_stripped, re.IGNORECASE,
+            )
+            if m:
+                min_due = _clean_amount(m.group(1))
+
+            # Direct match: "Minimum Amount Due" or "MINIMUM DUE" followed by amount
+            if min_due is None:
+                m = re.search(
                 r'(?:Minimum\s+Amount\s+Due|Min\.?\s+(?:Amt\.?\s+)?Due|MINIMUM\s+DUE)[:\s=]*'
                 r'[`₹CrRs.]*\s*([\d,]+\.?\d*)',
                 line_stripped, re.IGNORECASE,
