@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, CreditCard, Building2, ChevronDown, ChevronUp, Eye, X, BarChart3, List, Edit2, Check } from 'lucide-react';
+import { FileText, CreditCard, Building2, ChevronDown, ChevronUp, Eye, X, BarChart3, List, Edit2, Check, FileDown } from 'lucide-react';
 import { updateTransaction, getMatchingTransactions } from '../api/transactions';
 import CategorySelect from '../components/CategorySelect';
 import { getStatements, getStatement } from '../api/statements';
@@ -206,29 +206,9 @@ export default function StatementsPage() {
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="space-y-3">
                   {monthStmts.map((stmt) => (
-                    <div key={stmt.id} className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between mb-1.5">
-                        <span className="text-xs font-semibold text-indigo-600">{stmt.bank_name || 'Unknown'}</span>
-                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${getStatusColor(stmt.parse_status)}`}>
-                          {stmt.parse_status}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-600 leading-relaxed mb-2 line-clamp-2">
-                        {stmt.email_subject}
-                      </p>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-400">{stmt.transaction_count} txns</span>
-                        {stmt.total_amount_due != null && stmt.total_amount_due > 0 ? (
-                          <span className="font-semibold text-red-600">
-                            Due: {formatCurrency(stmt.total_amount_due)}
-                          </span>
-                        ) : stmt.email_date ? (
-                          <span className="text-gray-400">{formatDate(stmt.email_date)}</span>
-                        ) : null}
-                      </div>
-                    </div>
+                    <MonthlyStatementCard key={stmt.id} statement={stmt} />
                   ))}
                 </div>
               </div>
@@ -362,24 +342,7 @@ function StatementRow({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              // Open decrypted PDF in new tab
-              const token = localStorage.getItem('finsight_token');
-              fetch(`/api/pdf/${statement.id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              })
-                .then((res) => {
-                  if (res.ok) return res.blob();
-                  // Fallback to raw content modal if PDF not found
-                  onViewRaw();
-                  return null;
-                })
-                .then((blob) => {
-                  if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, '_blank');
-                  }
-                })
-                .catch(() => onViewRaw());
+              openPdf(statement.id);
             }}
             className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
             title="View statement PDF"
@@ -565,5 +528,91 @@ function ExpandedTransactions({ transactions }: { transactions: import('../types
         </div>
       )}
     </>
+  );
+}
+
+
+/** Open a decrypted statement PDF in a new tab */
+function openPdf(statementId: number) {
+  const token = localStorage.getItem('finsight_token');
+  fetch(`/api/pdf/${statementId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then((res) => {
+      if (res.ok) return res.blob();
+      return null;
+    })
+    .then((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      }
+    })
+    .catch(() => {});
+}
+
+
+function MonthlyStatementCard({ statement: stmt }: { statement: import('../types').Statement }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const { data: detail } = useQuery({
+    queryKey: ['statement-detail', stmt.id],
+    queryFn: () => getStatement(stmt.id),
+    enabled: isExpanded,
+  });
+
+  return (
+    <div className="border border-gray-100 rounded-lg overflow-hidden">
+      <div
+        className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {isExpanded ? (
+          <ChevronDown size={14} className="text-gray-400 shrink-0" />
+        ) : (
+          <ChevronRight size={14} className="text-gray-400 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-xs font-semibold text-indigo-600">{stmt.bank_name || 'Unknown'}</span>
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(stmt.parse_status)}`}>
+              {stmt.parse_status}
+            </span>
+          </div>
+          <p className="text-xs text-gray-600 leading-relaxed line-clamp-1">
+            {stmt.email_subject}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-gray-400">{stmt.transaction_count} txns</span>
+          {stmt.total_amount_due != null && stmt.total_amount_due > 0 && (
+            <span className="text-xs font-semibold text-red-600">
+              Due: {formatCurrency(stmt.total_amount_due)}
+            </span>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); openPdf(stmt.id); }}
+            className="p-1.5 rounded-md hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-colors"
+            title="View PDF"
+          >
+            <Eye size={14} />
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="border-t border-gray-100 p-3 bg-gray-50/50">
+          {detail?.transactions && detail.transactions.length > 0 ? (
+            <ExpandedTransactions transactions={detail.transactions} />
+          ) : detail?.transactions && detail.transactions.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">No transactions in this statement</p>
+          ) : (
+            <div className="flex justify-center py-4">
+              <LoadingSpinner size={20} text="Loading transactions..." />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeftRight, Search, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { getTransactions, updateTransaction } from '../api/transactions';
 import CategorySelect from '../components/CategorySelect';
 import type { TransactionFilters } from '../api/transactions';
@@ -231,6 +231,7 @@ export default function TransactionsPage() {
                     <th className="px-4 py-3 w-32">Category</th>
                     <th className="px-3 py-3 w-20 hidden md:table-cell">Bank</th>
                     <th className="px-3 py-3 w-20 hidden lg:table-cell">Type</th>
+                    <th className="px-3 py-3 w-10 hidden lg:table-cell">PDF</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -286,6 +287,27 @@ export default function TransactionsPage() {
                       </td>
                       <td className="px-3 py-3 text-xs text-gray-500 hidden lg:table-cell capitalize">
                         {txn.card_type?.replace('_', ' ')}
+                      </td>
+                      <td className="px-3 py-3 hidden lg:table-cell">
+                        {txn.statement_id && (
+                          <button
+                            onClick={() => {
+                              const token = localStorage.getItem('finsight_token');
+                              fetch(`/api/pdf/${txn.statement_id}`, {
+                                headers: { Authorization: `Bearer ${token}` },
+                              })
+                                .then((res) => res.ok ? res.blob() : null)
+                                .then((blob) => {
+                                  if (blob) window.open(URL.createObjectURL(blob), '_blank');
+                                })
+                                .catch(() => {});
+                            }}
+                            className="p-1 rounded hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-colors"
+                            title="View statement PDF"
+                          >
+                            <Eye size={13} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
